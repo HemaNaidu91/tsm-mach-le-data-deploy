@@ -2,7 +2,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 from dotenv import load_dotenv
-from fastapi import Depends
 
 # Note joel:
 # I know the table schemas and table naming is inconsisten with plural and singluar naming

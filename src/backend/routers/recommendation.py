@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from schemas.recommendation import *
+from schemas.recommendation import MoviesResponse, MoviePredictions, UserMovieRatings
 from services import recommendation as recommendation_service
 
 # from services.user_service import get_user, list_users

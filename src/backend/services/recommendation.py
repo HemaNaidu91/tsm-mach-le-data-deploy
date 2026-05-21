@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, Query
-import requests, dotenv, os, json
+import requests
+import dotenv
+import os
+import json
 
-from models.user import Users
-from models.rating import Ratings
 from models.movie import Movies, Movie_genres, Tags
 from models.enum import Genres
 
