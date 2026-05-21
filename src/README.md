@@ -56,7 +56,136 @@ Notes for development:
 
 
 ## For Deployment - with Docker
-tbd
+
+Deployment targets **Google Cloud Run** (fully managed, HTTPS URLs auto-generated). Each service gets a `https://*-xxx.run.app` URL. The CI/CD pipeline is handled by GitHub Actions.
+
+**Prerequisites:** A Google Cloud account with $300 free trial credits and a GitHub account.
+
+### 1. Create GCP project and enable APIs
+
+In [Google Cloud Console](https://console.cloud.google.com):
+1. Create a new project (e.g. `cinematch`)
+2. Enable the following APIs (APIs & Services → Enable APIs):
+   - Cloud Run API
+   - Cloud SQL Admin API
+   - Artifact Registry API
+   - Secret Manager API
+
+### 2. Set up infrastructure (run in Google Cloud Shell)
+
+```bash
+PROJECT_ID="$(gcloud config get-value project)"
+REGION="europe-west6"   # change to your nearest region
+
+# Artifact Registry (stores Docker images)
+gcloud artifacts repositories create cinematch \
+  --repository-format=docker \
+  --location=$REGION
+
+# Cloud SQL (PostgreSQL database)
+gcloud sql instances create cinematch-db \
+  --database-version=POSTGRES_15 \
+  --tier=db-f1-micro \
+  --region=$REGION \
+  --storage-size=10GB
+
+gcloud sql databases create cinematch --instance=cinematch-db
+gcloud sql users create cinematch_user --instance=cinematch-db --password=CHOOSE_A_PASSWORD
+
+# Note the public IP for the next step:
+gcloud sql instances describe cinematch-db --format="value(ipAddresses[0].ipAddress)"
+```
+
+### 3. Store secrets in Secret Manager
+
+```bash
+# Database connection string (replace CLOUD_SQL_IP and YOUR_PASSWORD)
+echo -n "postgresql://cinematch_user:YOUR_PASSWORD@CLOUD_SQL_IP:5432/cinematch?sslmode=require" \
+  | gcloud secrets create DATABASE_URL --data-file=-
+
+# Weights & Biases API key (for model service to download the model)
+echo -n "YOUR_WANDB_API_KEY" \
+  | gcloud secrets create WANDB_API_KEY --data-file=-
+```
+
+### 4. Create a GitHub Actions service account
+
+```bash
+PROJECT_ID="$(gcloud config get-value project)"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")"
+
+gcloud iam service-accounts create github-actions --display-name="GitHub Actions"
+sleep 5   # wait for propagation
+
+SA="github-actions@${PROJECT_ID}.iam.gserviceaccount.com"
+
+for role in roles/run.admin roles/artifactregistry.admin roles/cloudsql.client \
+            roles/secretmanager.secretAccessor roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA" --role="$role"
+done
+
+# Allow Cloud Run services to read secrets
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# Download key — paste the output into GitHub Secret GCP_SA_KEY (do not share elsewhere)
+gcloud iam service-accounts keys create key.json --iam-account="$SA"
+cat key.json
+```
+
+### 5. Add GitHub Secrets and Variables
+
+In the repository → **Settings → Secrets and variables → Actions**:
+
+**Secrets:**
+
+| Name | Value |
+|---|---|
+| `GCP_SA_KEY` | Full JSON content from `key.json` |
+| `GCP_PROJECT_ID` | Your GCP project ID (e.g. `cinematch-497011`) |
+| `CLOUD_SQL_PASSWORD` | The password chosen in step 2 |
+
+**Variables** (plain text, not secrets):
+
+| Name | Value |
+|---|---|
+| `GCP_REGION` | e.g. `europe-west6` |
+| `WANDB_PROJECT` | W&B project name (e.g. `movie-rec-pyg`) |
+| `WANDB_ENTITY` | W&B username |
+| `WANDB_ARTIFACT_NAME` | `movie-rec-link-regression-weights` |
+| `CLOUD_SQL_USER` | `cinematch_user` |
+
+### 6. Deploy
+
+Push to `main` — GitHub Actions automatically:
+1. Runs `ci.yml`: lints all services and validates Docker builds
+2. Runs `deploy.yml`: builds and pushes Docker images to Artifact Registry, then deploys all three services to Cloud Run in order (model-service → backend → frontend), wiring the service URLs together
+
+```bash
+git add .
+git commit -m "chore: initial deployment"
+git push
+```
+
+Monitor progress in the repository → **Actions** tab.
+
+### 7. Seed the database (once)
+
+After the first successful deploy, go to **Actions → Seed Database → Run workflow**. This runs `ml_movies_small.sql` against Cloud SQL via the Cloud SQL Auth Proxy (~1–2 min for 147K lines).
+
+### 8. Access the app
+
+At the end of the `deploy.yml` run the last step prints the three public URLs:
+
+```
+Frontend: https://cinematch-frontend-xxxx-ew.a.run.app   ← open this in your browser
+Backend:  https://cinematch-backend-xxxx-ew.a.run.app/docs
+Model:    https://cinematch-model-service-xxxx-ew.a.run.app/health
+```
+
+> **Note:** The first request after a period of inactivity may take ~30s (Cloud Run cold start while the model service downloads the ONNX model from W&B).
 
 
 ## Shutdown PostgresQL
