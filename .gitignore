@@ -144,6 +144,8 @@ celerybeat.pid
 # .env
 /training/.env
 /src/model-service/.env
+/src/backend/.env
+/src/frontend/.env
 .envrc
 .venv
 env/

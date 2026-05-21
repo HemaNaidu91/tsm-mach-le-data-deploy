@@ -11,7 +11,7 @@ from fastapi import Depends
 # setup the db connection
 load_dotenv()
 
-DATABASE_URL: str = (
+DATABASE_URL: str = os.getenv("DATABASE_URL") or (
     f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
     f"@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 )

@@ -1,0 +1,111 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGION: ${{ vars.GCP_REGION }}
+  PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # ── Model Service ────────────────────────────────────────────────────────
+      - name: Build & push model-service
+        run: |
+          docker build \
+            --build-arg MODEL_SERVICE_EXTRA=cpu \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/model-service:latest \
+            src/model-service/
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/model-service:latest
+
+      - name: Deploy model-service
+        run: |
+          gcloud run deploy cinematch-model-service \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/model-service:latest \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --port 8001 \
+            --memory 1Gi \
+            --timeout 120 \
+            --set-env-vars "HOST=0.0.0.0,PORT=8001,MODEL_SERVICE_DEVICE=cpu,MODEL_SERVICE_TOP_K=10,MODEL_SERVICE_ARTIFACT_CACHE_DIR=/tmp/artifacts" \
+            --set-env-vars "WANDB_PROJECT=${{ vars.WANDB_PROJECT }},WANDB_ENTITY=${{ vars.WANDB_ENTITY }},WANDB_ARTIFACT_NAME=${{ vars.WANDB_ARTIFACT_NAME }},WANDB_ARTIFACT_ALIAS=latest" \
+            --set-secrets "WANDB_API_KEY=WANDB_API_KEY:latest"
+
+      - name: Get model-service URL
+        id: model_url
+        run: |
+          URL=$(gcloud run services describe cinematch-model-service \
+            --region ${{ env.REGION }} --format "value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # ── Backend ──────────────────────────────────────────────────────────────
+      - name: Build & push backend
+        run: |
+          docker build \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/backend:latest \
+            src/backend/
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/backend:latest
+
+      - name: Deploy backend
+        run: |
+          gcloud run deploy cinematch-backend \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/backend:latest \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --port 8000 \
+            --memory 512Mi \
+            --set-env-vars "HOST=0.0.0.0,PORT=8000,DEV_MODE=0,MODULE_NAME=main:app,TITLE=CinematchAPI,VERSION_NR=0.3" \
+            --set-env-vars "MODEL_SERVICE_URL=${{ steps.model_url.outputs.url }}" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest"
+
+      - name: Get backend URL
+        id: backend_url
+        run: |
+          URL=$(gcloud run services describe cinematch-backend \
+            --region ${{ env.REGION }} --format "value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # ── Frontend ─────────────────────────────────────────────────────────────
+      - name: Build & push frontend
+        run: |
+          docker build \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/frontend:latest \
+            src/frontend/
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/frontend:latest
+
+      - name: Deploy frontend
+        run: |
+          gcloud run deploy cinematch-frontend \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/frontend:latest \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --set-env-vars "API_URL=${{ steps.backend_url.outputs.url }},TOP_K_RECOMMENDATION_CARDS=3,TOP_K_GRAPH_RECOMMENDATIONS=5,MAX_SEARCH_RESULTS=10"
+
+      - name: Print URLs
+        run: |
+          FRONTEND_URL=$(gcloud run services describe cinematch-frontend \
+            --region ${{ env.REGION }} --format "value(status.url)")
+          echo "Frontend: $FRONTEND_URL"
+          echo "Backend:  ${{ steps.backend_url.outputs.url }}"
+          echo "Model:    ${{ steps.model_url.outputs.url }}"

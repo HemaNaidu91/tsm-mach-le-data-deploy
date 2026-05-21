@@ -6,5 +6,3 @@ pydantic==2.12.5
 uvicorn==0.34.0
 requests==2.33.1
 
-# other
-starlette==1.0.0 # needed for middleware cros support in fastapi
