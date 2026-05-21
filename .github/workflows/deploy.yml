@@ -47,7 +47,7 @@ jobs:
             --port 8001 \
             --memory 1Gi \
             --timeout 120 \
-            --set-env-vars "HOST=0.0.0.0,PORT=8001,MODEL_SERVICE_DEVICE=cpu,MODEL_SERVICE_TOP_K=10,MODEL_SERVICE_ARTIFACT_CACHE_DIR=/tmp/artifacts" \
+            --set-env-vars "HOST=0.0.0.0,MODEL_SERVICE_DEVICE=cpu,MODEL_SERVICE_TOP_K=10,MODEL_SERVICE_ARTIFACT_CACHE_DIR=/tmp/artifacts" \
             --set-env-vars "WANDB_PROJECT=${{ vars.WANDB_PROJECT }},WANDB_ENTITY=${{ vars.WANDB_ENTITY }},WANDB_ARTIFACT_NAME=${{ vars.WANDB_ARTIFACT_NAME }},WANDB_ARTIFACT_ALIAS=latest" \
             --set-secrets "WANDB_API_KEY=WANDB_API_KEY:latest"
 
@@ -74,7 +74,7 @@ jobs:
             --allow-unauthenticated \
             --port 8000 \
             --memory 512Mi \
-            --set-env-vars "HOST=0.0.0.0,PORT=8000,DEV_MODE=0,MODULE_NAME=main:app,TITLE=CinematchAPI,VERSION_NR=0.3" \
+            --set-env-vars "HOST=0.0.0.0,DEV_MODE=0,MODULE_NAME=main:app,TITLE=CinematchAPI,VERSION_NR=0.3" \
             --set-env-vars "MODEL_SERVICE_URL=${{ steps.model_url.outputs.url }}" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest"
 
