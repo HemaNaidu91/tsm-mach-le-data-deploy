@@ -47,7 +47,7 @@ jobs:
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
             --memory 1Gi \
-            --timeout 120 \
+            --timeout 300 \
             --set-env-vars "HOST=0.0.0.0,MODEL_SERVICE_DEVICE=cpu,MODEL_SERVICE_TOP_K=10,MODEL_SERVICE_ARTIFACT_CACHE_DIR=/tmp/artifacts" \
             --set-env-vars "WANDB_PROJECT=${{ vars.WANDB_PROJECT }},WANDB_ENTITY=${{ vars.WANDB_ENTITY }},WANDB_ARTIFACT_NAME=${{ vars.WANDB_ARTIFACT_NAME }},WANDB_ARTIFACT_ALIAS=latest" \
             --set-secrets "WANDB_API_KEY=WANDB_API_KEY:latest"
