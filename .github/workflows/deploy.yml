@@ -8,9 +8,6 @@ env:
   REGION: ${{ vars.GCP_REGION }}
   PROJECT: ${{ secrets.GCP_PROJECT_ID }}
 
-name: Debug project
-  run: echo ${{ secrets.GCP_PROJECT_ID }}
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -20,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Debug project
+        run: echo ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
