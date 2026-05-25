@@ -17,8 +17,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Debug project
-        run: echo ${{ secrets.GCP_PROJECT_ID }}
+        run: echo "PROJECT=${{ secrets.GCP_PROJECT_ID }}"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -30,23 +31,25 @@ jobs:
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-      
+
+      # ── Debug WANDB ───────────────────────────────────────────────
       - name: Debug WANDB
-         run: |
-          echo "PROJECT=${{ vars.GCP_REGION }}"
+        run: |
+          echo "REGION=${{ vars.GCP_REGION }}"
+          echo "PROJECT=${{ secrets.GCP_PROJECT_ID }}"
           echo "WANDB_PROJECT=${{ vars.WANDB_PROJECT }}"
           echo "WANDB_ENTITY=${{ vars.WANDB_ENTITY }}"
 
-      # ── Model Service ────────────────────────────────────────────────────────
+      # ── Model Service ──────────────────────────────────────────────
       - name: Build & push model-service
         run: |
           docker build \
             --build-arg MODEL_SERVICE_EXTRA=cpu \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/model-service:latest \
             src/model-service/
+
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/model-service:latest
 
-            
       - name: Deploy model-service
         run: |
           gcloud run deploy cinematch-model-service \
@@ -55,8 +58,7 @@ jobs:
             --allow-unauthenticated \
             --memory 1Gi \
             --timeout 300 \
-            --set-env-vars "HOST=0.0.0.0,MODEL_SERVICE_DEVICE=cpu,MODEL_SERVICE_TOP_K=10,MODEL_SERVICE_ARTIFACT_CACHE_DIR=/tmp/artifacts" \
-            --set-env-vars "WANDB_MODE=disabled" \
+            --set-env-vars "HOST=0.0.0.0,MODEL_SERVICE_DEVICE=cpu,MODEL_SERVICE_TOP_K=10,MODEL_SERVICE_ARTIFACT_CACHE_DIR=/tmp/artifacts,WANDB_MODE=disabled,WANDB_PROJECT=${{ vars.WANDB_PROJECT }},WANDB_ENTITY=${{ vars.WANDB_ENTITY }}" \
             --set-secrets "WANDB_API_KEY=WANDB_API_KEY:latest"
 
       - name: Get model-service URL
@@ -66,12 +68,13 @@ jobs:
             --region ${{ env.REGION }} --format "value(status.url)")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-      # ── Backend ──────────────────────────────────────────────────────────────
+      # ── Backend ─────────────────────────────────────────────────────
       - name: Build & push backend
         run: |
           docker build \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/backend:latest \
             src/backend/
+
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/backend:latest
 
       - name: Deploy backend
@@ -82,8 +85,7 @@ jobs:
             --allow-unauthenticated \
             --memory 512Mi \
             --add-cloudsql-instances ${{ env.PROJECT }}:${{ env.REGION }}:cinematch-db \
-            --set-env-vars "HOST=0.0.0.0,DEV_MODE=0,MODULE_NAME=main:app,TITLE=CinematchAPI,VERSION_NR=0.3" \
-            --set-env-vars "MODEL_SERVICE_URL=${{ steps.model_url.outputs.url }}" \
+            --set-env-vars "HOST=0.0.0.0,DEV_MODE=0,MODULE_NAME=main:app,TITLE=CinematchAPI,VERSION_NR=0.3,MODEL_SERVICE_URL=${{ steps.model_url.outputs.url }}" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest"
 
       - name: Get backend URL
@@ -93,12 +95,13 @@ jobs:
             --region ${{ env.REGION }} --format "value(status.url)")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-      # ── Frontend ─────────────────────────────────────────────────────────────
+      # ── Frontend ────────────────────────────────────────────────
       - name: Build & push frontend
         run: |
           docker build \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/frontend:latest \
             src/frontend/
+
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/frontend:latest
 
       - name: Deploy frontend
@@ -114,6 +117,7 @@ jobs:
         run: |
           FRONTEND_URL=$(gcloud run services describe cinematch-frontend \
             --region ${{ env.REGION }} --format "value(status.url)")
+
           echo "Frontend: $FRONTEND_URL"
           echo "Backend:  ${{ steps.backend_url.outputs.url }}"
           echo "Model:    ${{ steps.model_url.outputs.url }}"
