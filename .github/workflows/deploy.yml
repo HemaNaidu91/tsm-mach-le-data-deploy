@@ -40,6 +40,12 @@ jobs:
             src/model-service/
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT }}/cinematch/model-service:latest
 
+      - name: Debug WANDB
+         run: |
+            echo "PROJECT=${{ vars.GCP_REGION }}"
+            echo "WANDB_PROJECT=${{ vars.WANDB_PROJECT }}"
+            echo "WANDB_ENTITY=${{ vars.WANDB_ENTITY }}"
+            
       - name: Deploy model-service
         run: |
           gcloud run deploy cinematch-model-service \
