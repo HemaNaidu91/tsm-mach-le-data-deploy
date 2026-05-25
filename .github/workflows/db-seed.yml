@@ -1,36 +1,85 @@
-- name: Start Cloud SQL Auth Proxy
-  run: |
-    ./cloud-sql-proxy \
-      ${{ secrets.GCP_PROJECT_ID }}:${{ vars.GCP_REGION }}:cinematch-db \
-      --port 5432 &
-    sleep 10
+name: Seed Database 
 
-- name: Install psql client
-  run: sudo apt-get install -y postgresql-client
+on:
+  workflow_dispatch:
 
-- name: Create database if not exists
-  env:
-    PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
-  run: |
-    psql \
-      --host=127.0.0.1 \
-      --port=5432 \
-      --username=postgres \
-      --dbname=postgres \
-      -c "CREATE DATABASE cinematch;" || true
+jobs:
+  seed:
+    runs-on: ubuntu-latest
 
-- name: Seed database
-  env:
-    PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
-  run: |
-    sed \
-      -e '/^\\restrict/d' \
-      -e '/^SET transaction_timeout/d' \
-      -e '/OWNER TO postgres;/d' \
-      src/postgresql/ml_movies_small.sql | \
-    psql \
-      --host=127.0.0.1 \
-      --port=5432 \
-      --username=postgres \
-      --dbname=cinematch \
-      -v ON_ERROR_STOP=1
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Authenticate
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Install Cloud SQL Proxy
+      - name: Install Cloud SQL Proxy
+        run: |
+          curl -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+
+      # Start proxy
+      - name: Start Cloud SQL Proxy
+        run: |
+          ./cloud-sql-proxy \
+            ${{ secrets.GCP_PROJECT_ID }}:${{ vars.GCP_REGION }}:cinematch-db \
+            --port 5432 &
+          sleep 8
+
+      # Install psql
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      # STEP 1: Ensure DB exists
+      - name: Ensure database exists
+        env:
+          PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
+        run: |
+          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d postgres <<EOF
+          CREATE DATABASE cinematch;
+          EOF || echo "DB already exists"
+
+      # STEP 2: Create schemas safely
+      - name: Create schemas
+        env:
+          PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
+        run: |
+          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d cinematch <<EOF
+          CREATE SCHEMA IF NOT EXISTS movie;
+          CREATE SCHEMA IF NOT EXISTS enum;
+          EOF
+
+      # STEP 3: Seed data safely
+      - name: Seed database
+        env:
+          PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
+        run: |
+          sed \
+            -e '/^\\restrict/d' \
+            -e '/^SET transaction_timeout/d' \
+            -e '/OWNER TO postgres;/d' \
+            src/postgresql/ml_movies_small.sql | \
+          psql \
+            -h 127.0.0.1 \
+            -U ${{ vars.CLOUD_SQL_USER }} \
+            -d cinematch \
+            --set ON_ERROR_STOP=1
+
+      # STEP 4: Verify tables
+      - name: Verify tables
+        env:
+          PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
+        run: |
+          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d cinematch -c "\dt movie.*"
