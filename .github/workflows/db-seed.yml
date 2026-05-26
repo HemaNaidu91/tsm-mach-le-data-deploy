@@ -1,4 +1,4 @@
-name: Seed Database 
+name: Seed Database
 
 on:
   workflow_dispatch:
@@ -12,25 +12,28 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      # 1. Checkout repo
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # Authenticate
+      # 2. Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # 3. Setup gcloud
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # Install Cloud SQL Proxy
+      # 4. Install Cloud SQL Proxy
       - name: Install Cloud SQL Proxy
         run: |
           curl -o cloud-sql-proxy \
             https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
 
-      # Start proxy
+      # 5. Start Cloud SQL Proxy
       - name: Start Cloud SQL Proxy
         run: |
           ./cloud-sql-proxy \
@@ -38,30 +41,21 @@ jobs:
             --port 5432 &
           sleep 8
 
-      # Install psql
+      # 6. Install PostgreSQL client
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      # STEP 1: Ensure DB exists
+      # 7. Ensure database exists (safe version)
       - name: Ensure database exists
         env:
           PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
         run: |
-          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d postgres <<EOF
-          CREATE DATABASE cinematch;
-          EOF || echo "DB already exists"
+          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d postgres -tc \
+          "SELECT 1 FROM pg_database WHERE datname='cinematch'" | grep -q 1 || \
+          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d postgres -c \
+          "CREATE DATABASE cinematch"
 
-      # STEP 2: Create schemas safely
-      - name: Create schemas
-        env:
-          PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
-        run: |
-          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d cinematch <<EOF
-          CREATE SCHEMA IF NOT EXISTS movie;
-          CREATE SCHEMA IF NOT EXISTS enum;
-          EOF
-
-      # STEP 3: Seed data safely
+      # 8. Seed database (FIXED PATH)
       - name: Seed database
         env:
           PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
@@ -70,16 +64,19 @@ jobs:
             -e '/^\\restrict/d' \
             -e '/^SET transaction_timeout/d' \
             -e '/OWNER TO postgres;/d' \
-            src/postgresql/ml_movies_small.sql | \
+            postgres_dump/ml_movies_small.sql | \
           psql \
             -h 127.0.0.1 \
             -U ${{ vars.CLOUD_SQL_USER }} \
             -d cinematch \
             --set ON_ERROR_STOP=1
 
-      # STEP 4: Verify tables
+      # 9. Verify tables
       - name: Verify tables
         env:
           PGPASSWORD: ${{ secrets.CLOUD_SQL_PASSWORD }}
         run: |
-          psql -h 127.0.0.1 -U ${{ vars.CLOUD_SQL_USER }} -d cinematch -c "\dt movie.*"
+          psql -h 127.0.0.1 \
+            -U ${{ vars.CLOUD_SQL_USER }} \
+            -d cinematch \
+            -c "\dt movie.*"
