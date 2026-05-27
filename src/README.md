@@ -7,18 +7,19 @@ Notes for development:
 - About environments:
   - All virtual environments should be named `.venv`
   - The config files should be named `.env`
-  - The .env-files will be added to the repo. This is usually not reccomended. But because this is only a school project with public data, there is no real security risk. Additionally, it makes the hand-in of the project easier.
+  - The .env-files will not be added to the repo. Examples are provided, name `.env_sample` which define all needed variables
 - About backend:
   - The backend uses a simplified structure due to its limited size
 
 ## For Poduction - with docker
 
-1. Adjust the `/backend/.evv` file (if needed):
+1. Adjust the `/backend/.env` file (if needed):
    1. `POSTGRES_HOST=db`
    2. `MODEL_SERVICE_URL=http://model-service:8001`
-2. Adjust the `/frontend/.evv` file (if needed):
+2. Adjust the `/frontend/.env` file (if needed):
    1. `API_URL=http://backend:8001`
-3. Open a shell or bash:
+3. Adjust the `/model-service/.env` file (if needed):
+4. Open a shell or bash:
    1. Navigate to the ./src directory
    2. run to build and boot:
       1. shell: `docker compose -f docker-compose.db_included.yml up --build`

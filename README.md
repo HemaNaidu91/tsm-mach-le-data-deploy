@@ -1,33 +1,21 @@
 # MSE TSM MachLeData Group Project
 
-## Further Steps:
-
-1. (Paidi) DrawIO for an architecture and workflow
-2. (Joël) Sketch a Presenstion Ptich Deck
-3. Meet up and finalize Pitch - 06.04.2026 (10:00)
-4. Work on stuff:
-   1. Pedro: Building, versioning, and packing the model (PyG, wandb, ONNX)
-   2. Rino: FrontEnd (Streamlit)
-   3. Peidi: Deployment and Docker Images
-   4. Joël: Backend (Fast API, ORM, n Stuff)
-
 ## About the Project
 
 Repo for the group project TSM MachLeData.<br>
 Project members:
-
 - Hemanthi Naidu
 - Pedro Stark
 - Rino Albertin
 - Joël Tauss
 
 Goal:
-
-- Building a movie recommendation system with sklearn and pytorch
+- Building a movie recommendation system with pytorch geometric
 - Creating a deployment pipeline
 - Building and hosting the application
 
-See project_documents for further information
+Hosted instance of application at: https://cinematch-frontend-4v2wwdcp7a-ew.a.run.app/ <br>
+See project_documents for further information.
 
 ## Tooling and software requirements
 
@@ -38,17 +26,19 @@ See project_documents for further information
 | Docker Desktop  | 4.19    | https://docs.docker.com/get-started/get-docker/ |
 | Libraries*      | -       | see the requirements                            |
 
-*Libraries and packages only need to be installed manually if the project is not run within docker
+*Libraries and packages only need to be installed manually if the project is not run within docker or the application is not hosted.
 
 ## Data
 
-The following data can be used to build a baseline model:
+The following data is used to build a baseline model:
 
 - [MovieLens: ml-latest.zip](https://files.grouplens.org/datasets/movielens/) - It contains 33'832'162 ratings and 2'328'315 tag applications across 86'537 movies. These data were created by 330'975 users between January 09, 1995 and July 20, 2023. This dataset was generated on July 20, 2023.
 
-## Getting Started
+## Getting Started (local deployment and development)
 
 ### Setting up the python environment
+
+0. Install all needed softwares and tools, the application is not run via docker
 
 1. Make sure uv is installed
    https://docs.astral.sh/uv/getting-started/installation/
